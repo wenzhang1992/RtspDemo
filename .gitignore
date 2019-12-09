@@ -1,0 +1,12 @@
+
+*.obj
+*.tlog
+*.pdb
+*.log
+*.pch
+*.idb
+*.exe
+*.ilk
+*.ipch
+*.db
+.vs/RTSP_Demo/v14/.suo

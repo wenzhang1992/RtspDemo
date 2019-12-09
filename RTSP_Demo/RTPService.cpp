@@ -9,8 +9,6 @@ CRTPService::CRTPService()
 
 CRTPService::CRTPService(NALUH264PacketQueue *buffer)
 {
-	m_pInputNaluQueue = buffer;
-
 	m_pOutputNaluQueue = new NALUH264PacketQueue();
 }
 
@@ -50,6 +48,9 @@ void CRTPService::AddData(NALUH264Packet *packet)
 
 				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem));
 
+				//设置当前包为 00 00 00 01类型的NAL
+				packetTemp->SetStartType(false);
+
 				packetTemp->PushData(temp, (beginItem - startItem));
 
 				m_pOutputNaluQueue->PushData(packetTemp);
@@ -82,6 +83,9 @@ void CRTPService::AddData(NALUH264Packet *packet)
 
 				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem));
 
+				//设置当前包为00 00 00 00 01类型的NAL
+				packetTemp->SetStartType(true);
+
 				packetTemp->PushData(temp, (beginItem - startItem));
 
 				m_pOutputNaluQueue->PushData(packetTemp);
@@ -90,7 +94,7 @@ void CRTPService::AddData(NALUH264Packet *packet)
 
 				m_svDataBuffer.erase(startItem, beginItem + 1);
 
-				//进行删除操作后，迭代器启始失效
+				//进行删除操作后，迭代器起始标志失效，进行重新获取
 				beginItem = m_svDataBuffer.begin();
 			}
 			else
@@ -103,6 +107,169 @@ void CRTPService::AddData(NALUH264Packet *packet)
 	}
 }
 
+void CRTPService::SetStatus(bool status)
+{
+	std::unique_lock<std::mutex> lock(m_lock);
+
+	m_bRunStatus = status;
+}
+
 CRTPService::~CRTPService()
 {
+}
+
+void CRTPService::RtpPacketGenerate(uint32_t timeStamp)
+{
+	while (m_bRunStatus)
+	{
+		if (m_pOutputNaluQueue->GetSize() != 0)
+		{
+			NALUH264Packet *h264Packet = m_pOutputNaluQueue->GetData();
+
+			if (h264Packet->GetSize() >= 1400)
+			{
+				RtpPacketGenerate_FUs(h264Packet, timeStamp);
+			}
+			else
+			{
+				RtpPacketGenerate_Signal(h264Packet, timeStamp);
+			}
+
+			delete h264Packet;
+
+		}
+	}
+}
+
+void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t timeStamp)
+{
+	RTPPacket_Signal *rtpPacket = new RTPPacket_Signal();
+
+	rtpPacket->header.V = 0x2;
+
+	rtpPacket->header.P = 0x0;
+
+	rtpPacket->header.X = 0x0;
+
+	rtpPacket->header.CC = 0x0;
+
+	rtpPacket->header.M = 0x0;
+
+	rtpPacket->header.PT = 0x60;
+
+	m_uiFrameSquence++;
+
+	rtpPacket->header.seqNumber = m_uiFrameSquence;
+
+	rtpPacket->header.timeStamp = timeStamp;
+
+	rtpPacket->header.SSRC = 0x00000000;
+
+	rtpPacket->header.CSRC = 0x00000000;
+
+	uint8_t *buffer = new uint8_t[packet->GetSize()];
+
+	packet->GetData(buffer);
+
+	if (packet->GetStartType())
+	{
+		rtpPacket->data = new uint8_t[packet->GetSize() - 5];
+
+		memcpy(rtpPacket->data, buffer + 5, packet->GetSize() - 5);
+
+		uint8_t *data = new uint8_t[packet->GetSize() - 5 + 16];
+
+		memcpy(data, &(rtpPacket->header), 16);
+
+		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 5);
+
+		m_sqRtpPacketQueue.push(data);
+	}
+	else
+	{
+		rtpPacket->data = new uint8_t[packet->GetSize() - 4];
+
+		memcpy(rtpPacket->data, buffer + 4, packet->GetSize() - 4);
+
+		uint8_t *data = new uint8_t[packet->GetSize() - 4 + 16];
+
+		memcpy(data, &(rtpPacket->header), 16);
+
+		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 4);
+
+		m_sqRtpPacketQueue.push(data);
+	}
+
+	delete[] buffer;
+
+	delete packet;
+
+	delete rtpPacket;
+}
+
+void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeStamp)
+{
+	int bufferCount = packet->GetSize();
+
+	bool isStart = true;
+
+	uint8_t *buffer = new uint8_t[packet->GetSize()];
+
+	packet->GetData(buffer);
+
+	uint8_t NALHead = buffer[5];
+
+	while (bufferCount >1400)
+	{
+		RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
+
+		rtpPacket->header.V = 0x2;
+
+		rtpPacket->header.P = 0x0;
+
+		rtpPacket->header.X = 0x0;
+
+		rtpPacket->header.CC = 0x0;
+
+		rtpPacket->header.M = 0x0;
+
+		rtpPacket->header.PT = 0x60;
+
+		m_uiFrameSquence++;
+
+		rtpPacket->header.seqNumber = m_uiFrameSquence;
+
+		rtpPacket->header.timeStamp = timeStamp;
+
+		rtpPacket->header.SSRC = 0x00000000;
+
+		rtpPacket->header.CSRC = 0x00000000;
+
+		if (packet->GetStartType())
+		{
+			uint8_t *temp =  (uint8_t*)(&(rtpPacket->indicator));
+
+			(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
+
+			temp = (uint8_t*)(&(rtpPacket->fuheader));
+
+			(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
+
+			if (isStart)
+			{
+				rtpPacket->fuheader.S = 0x1;
+			}
+			else
+			{
+				rtpPacket->fuheader.S = 0x0;
+			}
+
+			rtpPacket->fuheader.E = 0x0;
+
+			rtpPacket->fuheader.R = 0x0;
+
+			rtpPacket->indicator.TYPE = 28;
+
+		}
+	}
 }
