@@ -202,8 +202,6 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t time
 
 	delete[] buffer;
 
-	delete packet;
-
 	delete rtpPacket;
 }
 
@@ -217,11 +215,23 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 
 	packet->GetData(buffer);
 
-	uint8_t NALHead = buffer[5];
+	uint8_t NALHead;
+
+	if (packet->GetStartType())
+	{
+		NALHead = buffer[5];
+	}
+	else
+	{
+		NALHead = buffer[4];
+	}
+	
 
 	while (bufferCount >1400)
 	{
 		RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
+
+		uint8_t *data = new uint8_t[1400 - 18];
 
 		rtpPacket->header.V = 0x2;
 
@@ -245,31 +255,128 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 
 		rtpPacket->header.CSRC = 0x00000000;
 
+		//复制RTP头
+		memcpy(data, &rtpPacket, 16);
+
+		uint8_t *temp =  (uint8_t*)(&(rtpPacket->indicator));
+
+		(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
+
+		temp = (uint8_t*)(&(rtpPacket->fuheader));
+
+		(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
+
+		if (isStart)
+		{
+			rtpPacket->fuheader.S = 0x1;
+
+			isStart = false;
+		}
+		else
+		{
+			rtpPacket->fuheader.S = 0x0;
+		}
+
+		rtpPacket->fuheader.E = 0x0;
+
+		rtpPacket->fuheader.R = 0x0;
+
+		rtpPacket->indicator.TYPE = 28;
+
+		//复制FUs的Indicator
+		memcpy(data + 16, &(rtpPacket->indicator), 1);
+		//复制FUs的Header
+		memcpy(data + 17, &(rtpPacket->fuheader), 1);
+		//复制载荷数据
 		if (packet->GetStartType())
 		{
-			uint8_t *temp =  (uint8_t*)(&(rtpPacket->indicator));
-
-			(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
-
-			temp = (uint8_t*)(&(rtpPacket->fuheader));
-
-			(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
-
-			if (isStart)
-			{
-				rtpPacket->fuheader.S = 0x1;
-			}
-			else
-			{
-				rtpPacket->fuheader.S = 0x0;
-			}
-
-			rtpPacket->fuheader.E = 0x0;
-
-			rtpPacket->fuheader.R = 0x0;
-
-			rtpPacket->indicator.TYPE = 28;
-
+			memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 5, 1400 - 18);
 		}
+		else
+		{
+			memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 4, 1400 - 18);
+		}
+		
+		bufferCount -= (1400 - 18);
+
+		m_sqRtpPacketQueue.push(data);
+
+		delete rtpPacket;
 	}
+
+	RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
+
+	uint8_t *data = new uint8_t[1400 - 18];
+
+	rtpPacket->header.V = 0x2;
+
+	rtpPacket->header.P = 0x0;
+
+	rtpPacket->header.X = 0x0;
+
+	rtpPacket->header.CC = 0x0;
+
+	rtpPacket->header.M = 0x0;
+
+	rtpPacket->header.PT = 0x60;
+
+	m_uiFrameSquence++;
+
+	rtpPacket->header.seqNumber = m_uiFrameSquence;
+
+	rtpPacket->header.timeStamp = timeStamp;
+
+	rtpPacket->header.SSRC = 0x00000000;
+
+	rtpPacket->header.CSRC = 0x00000000;
+
+	//复制RTP头
+	memcpy(data, &rtpPacket, 16);
+
+	uint8_t *temp = (uint8_t*)(&(rtpPacket->indicator));
+
+	(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
+
+	temp = (uint8_t*)(&(rtpPacket->fuheader));
+
+	(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
+
+	if (isStart)
+	{
+		rtpPacket->fuheader.S = 0x1;
+
+		isStart = false;
+	}
+	else
+	{
+		rtpPacket->fuheader.S = 0x0;
+	}
+	//包结束标志置位
+	rtpPacket->fuheader.E = 0x1;
+
+	rtpPacket->fuheader.R = 0x0;
+
+	rtpPacket->indicator.TYPE = 28;
+
+	//复制FUs的Indicator
+	memcpy(data + 16, &(rtpPacket->indicator), 1);
+	//复制FUs的Header
+	memcpy(data + 17, &(rtpPacket->fuheader), 1);
+	//复制载荷数据
+	if (packet->GetStartType())
+	{
+		memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 5, bufferCount);
+	}
+	else
+	{
+		memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 4, bufferCount);
+	}
+
+	bufferCount -= (1400 - 18);
+
+	m_sqRtpPacketQueue.push(data);
+
+	delete rtpPacket;
+
+	delete[] buffer;
 }
