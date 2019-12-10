@@ -7,9 +7,8 @@
 class CRTPService
 {
 public:
-	CRTPService();
 
-	CRTPService(NALUH264PacketQueue *buffer);
+	CRTPService();
 
 	void AddData(NALUH264Packet *packet);
 
@@ -24,7 +23,7 @@ private:
 	//后台线程，处理H264的封包操作
 	std::thread *m_stRtpPacketThread = nullptr;
 
-	NALUH264PacketQueue *m_pOutputNaluQueue = nullptr;
+	Queue_S<NALUH264Packet> *m_pOutputNaluQueue = nullptr;
 
 	std::vector<uint8_t> m_svDataBuffer;	
 

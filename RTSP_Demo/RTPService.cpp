@@ -1,15 +1,9 @@
 #include "stdafx.h"
 #include "RTPService.h"
 
-
 CRTPService::CRTPService()
 {
-}
-
-
-CRTPService::CRTPService(NALUH264PacketQueue *buffer)
-{
-	m_pOutputNaluQueue = new NALUH264PacketQueue();
+	m_pOutputNaluQueue = new Queue_S<NALUH264Packet>();
 }
 
 void CRTPService::AddData(NALUH264Packet *packet)
@@ -53,7 +47,7 @@ void CRTPService::AddData(NALUH264Packet *packet)
 
 				packetTemp->PushData(temp, (beginItem - startItem));
 
-				m_pOutputNaluQueue->PushData(packetTemp);
+				m_pOutputNaluQueue->Push(packetTemp);
 
 				delete[] temp;
 
@@ -88,7 +82,7 @@ void CRTPService::AddData(NALUH264Packet *packet)
 
 				packetTemp->PushData(temp, (beginItem - startItem));
 
-				m_pOutputNaluQueue->PushData(packetTemp);
+				m_pOutputNaluQueue->Push(packetTemp);
 
 				delete[] temp;
 
@@ -122,9 +116,9 @@ void CRTPService::RtpPacketGenerate(uint32_t timeStamp)
 {
 	while (m_bRunStatus)
 	{
-		if (m_pOutputNaluQueue->GetSize() != 0)
+		if (m_pOutputNaluQueue->Size() != 0)
 		{
-			NALUH264Packet *h264Packet = m_pOutputNaluQueue->GetData();
+			NALUH264Packet *h264Packet = m_pOutputNaluQueue->Get();
 
 			if (h264Packet->GetSize() >= 1400)
 			{

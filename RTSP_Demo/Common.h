@@ -10,6 +10,7 @@
 #define ImagePixelSize 2
 #define ImageSize ImageHeight*ImageWidth*ImagePixelSize
 #define ImageSizeYUV ImageHeight *ImageWidth * 1.5
+
 typedef struct tag_RTPHeader
 {
 	char V : 2;
@@ -116,46 +117,42 @@ public:
 	}
 };
 
-class NALUH264PacketQueue
+template <typename T>
+class Queue_S
 {
-private:
-	std::queue<NALUH264Packet *> m_sQueue;
-
-	std::mutex m_lock;
-
-public:
-	NALUH264PacketQueue()
+public :
+	Queue_S()
 	{
 
 	}
 
-	~NALUH264PacketQueue()
+	~Queue_S()
 	{
-		for (int i = 0; i < m_sQueue.size(); i++)
+		while (m_sQueue.size() != 0)
 		{
-			NALUH264Packet *item = m_sQueue.front();
+			T* item = m_sQueue.front();
 
 			m_sQueue.pop();
 
 			delete item;
 		}
 	}
-	
-	void PushData(NALUH264Packet *obj)
+
+	void Push(T* item)
 	{
 		std::unique_lock<std::mutex> lock(m_lock);
 
-		m_sQueue.push(obj);
+		m_sQueue.push(item);
 	}
 
-	int GetSize()
+	int Size()
 	{
 		return m_sQueue.size();
 	}
 
-	NALUH264Packet* GetData()
+	T* Get()
 	{
-		if (m_sQueue.size() <= 0)
+		if (Size() == 0)
 		{
 			return nullptr;
 		}
@@ -163,13 +160,17 @@ public:
 		{
 			std::unique_lock<std::mutex> lock(m_lock);
 
-			NALUH264Packet *ret = m_sQueue.front();
+			T* temp = m_sQueue.front();
 
 			m_sQueue.pop();
 
-			return ret;
+			return temp;
 		}
 	}
+private:
+	std::queue<T*> m_sQueue;
+
+	std::mutex m_lock;
 };
 
 #endif

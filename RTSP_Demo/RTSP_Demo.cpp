@@ -83,7 +83,7 @@ void DataProcessFunc(CCycleQueue *bufferSource,CCycleQueue *bufferDst)
 	delete[] m_imageChange;
 }
 
-void DataEncodecFun(CCycleQueue *bufferSource, NALUH264PacketQueue *buffer)
+void DataEncodecFun(CCycleQueue *bufferSource, Queue_S<NALUH264Packet> *buffer)
 {
 	VideoEncodec *videoEncodc = new VideoEncodec();
 
@@ -113,7 +113,7 @@ void DataEncodecFun(CCycleQueue *bufferSource, NALUH264PacketQueue *buffer)
 
 			Packet->PushData(imageEncodec, frameSize);
 
-			buffer->PushData(Packet);
+			buffer->Push(Packet);
 		}
 	}
 }
@@ -141,9 +141,11 @@ int main()
 	/************************************************************************/
 	/*								图像编码处理								*/
 	/************************************************************************/
-	NALUH264PacketQueue *m_pNALUBuffer = new NALUH264PacketQueue();
+	Queue_S<NALUH264Packet> *m_pNALUBuffer = new Queue_S<NALUH264Packet>();
 	std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_pNALUBuffer);
-
+	/************************************************************************/
+	/*								图像封包处理								*/
+	/************************************************************************/
 	while (1);
 
     return 0;
