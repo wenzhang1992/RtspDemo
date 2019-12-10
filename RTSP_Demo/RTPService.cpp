@@ -4,43 +4,55 @@
 CRTPService::CRTPService()
 {
 	m_pOutputNaluQueue = new Queue_S<NALUH264Packet>();
+
+	m_pNALUH264Buffer = new uint8_t[ImageWidth*ImageHeight*1.5];
+
+	//初始化时，开启后台线程进行处理
+
+	SetStatus(true);
+
+	m_stRtpPacketThread = new std::thread([&]()->void {
+		RtpPacketGenerate();
+	});
 }
 
 void CRTPService::AddData(NALUH264Packet *packet)
 {
-	uint8_t *buffer = new uint8_t[ImageWidth*ImageHeight*1.5];
+	packet->GetData(m_pNALUH264Buffer);
 
-	packet->GetData(buffer);
 
 	for (int i = 0; i < packet->GetSize(); i++)
 	{
-		m_svDataBuffer.push_back(buffer[i]);
+		m_svDataBuffer.push_back(m_pNALUH264Buffer[i]);
 	}
-
-	delete[] buffer;
 
 	std::vector<uint8_t>::iterator beginItem = m_svDataBuffer.begin();
 
 	std::vector<uint8_t>::iterator startItem;
+
+	bool bisFirst = true;
 
 	while (beginItem != m_svDataBuffer.end())
 	{
 		//解析00 00 00 01的NALU
 		if (((*beginItem) == 0x00 && (*(beginItem + 1) == 0x00) && (*(beginItem + 2) == 0x00) && (*(beginItem + 3) == 0x01)))
 		{
+			bisFirst = false;
+
 			if ((beginItem != m_svDataBuffer.begin())&&(beginItem != (m_svDataBuffer.begin() + 1)))
 			{
 				uint8_t *temp = new uint8_t[(beginItem - startItem)];
 
-				std::vector<uint8_t>::iterator item = beginItem;
+				std::vector<uint8_t>::iterator item = m_svDataBuffer.begin();
 
 				for (int i = 0; i < (beginItem - startItem); i++)
 				{
-					temp[i] = (*(item));
+					temp[i] = (*item);
+
 					item++;
 				}
 
-				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem));
+				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem),packet->GetTimeStamp());
 
 				//设置当前包为 00 00 00 01类型的NAL
 				packetTemp->SetStartType(false);
@@ -59,10 +71,14 @@ void CRTPService::AddData(NALUH264Packet *packet)
 			else
 			{
 				startItem = beginItem;
+
+				beginItem++;
 			}
 		}
 		else if (((*beginItem) == 0x00 && (*(beginItem + 1) == 0x00) && (*(beginItem + 2) == 0x00) && (*(beginItem + 3) == 0x00) && (*(beginItem + 4) == 0x01)))
 		{
+			bisFirst = false;
+
 			if (beginItem != m_svDataBuffer.begin())
 			{
 				uint8_t *temp = new uint8_t[(beginItem - startItem)];
@@ -75,7 +91,7 @@ void CRTPService::AddData(NALUH264Packet *packet)
 					item++;
 				}
 
-				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem));
+				NALUH264Packet *packetTemp = new NALUH264Packet((beginItem - startItem),packet->GetTimeStamp());
 
 				//设置当前包为00 00 00 00 01类型的NAL
 				packetTemp->SetStartType(true);
@@ -94,10 +110,22 @@ void CRTPService::AddData(NALUH264Packet *packet)
 			else
 			{
 				startItem = beginItem;
+				beginItem++;
 			}
 		}
-
-		beginItem++;
+		else
+		{
+			if (bisFirst)
+			{
+				beginItem = m_svDataBuffer.erase(beginItem);
+			}
+			else
+			{
+				beginItem++;
+			}
+		}
+		
+		
 	}
 }
 
@@ -108,11 +136,23 @@ void CRTPService::SetStatus(bool status)
 	m_bRunStatus = status;
 }
 
-CRTPService::~CRTPService()
+uint8_t * CRTPService::GetPacket()
 {
+	std::unique_lock<std::mutex> lock(m_lock);
+
+	return m_sqRtpPacketQueue.Get();
 }
 
-void CRTPService::RtpPacketGenerate(uint32_t timeStamp)
+CRTPService::~CRTPService()
+{
+	SetStatus(false);
+
+	m_stRtpPacketThread->join();
+
+	delete m_pOutputNaluQueue;
+}
+
+void CRTPService::RtpPacketGenerate()
 {
 	while (m_bRunStatus)
 	{
@@ -122,11 +162,11 @@ void CRTPService::RtpPacketGenerate(uint32_t timeStamp)
 
 			if (h264Packet->GetSize() >= 1400)
 			{
-				RtpPacketGenerate_FUs(h264Packet, timeStamp);
+				RtpPacketGenerate_FUs(h264Packet);
 			}
 			else
 			{
-				RtpPacketGenerate_Signal(h264Packet, timeStamp);
+				RtpPacketGenerate_Signal(h264Packet);
 			}
 
 			delete h264Packet;
@@ -135,7 +175,7 @@ void CRTPService::RtpPacketGenerate(uint32_t timeStamp)
 	}
 }
 
-void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t timeStamp)
+void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet)
 {
 	RTPPacket_Signal *rtpPacket = new RTPPacket_Signal();
 
@@ -155,7 +195,7 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t time
 
 	rtpPacket->header.seqNumber = m_uiFrameSquence;
 
-	rtpPacket->header.timeStamp = timeStamp;
+	rtpPacket->header.timeStamp = packet->GetTimeStamp();
 
 	rtpPacket->header.SSRC = 0x00000000;
 
@@ -177,7 +217,7 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t time
 
 		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 5);
 
-		m_sqRtpPacketQueue.push(data);
+		m_sqRtpPacketQueue.Push(data);
 	}
 	else
 	{
@@ -191,7 +231,7 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t time
 
 		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 4);
 
-		m_sqRtpPacketQueue.push(data);
+		m_sqRtpPacketQueue.Push(data);
 	}
 
 	delete[] buffer;
@@ -199,7 +239,7 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t time
 	delete rtpPacket;
 }
 
-void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeStamp)
+void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 {
 	int bufferCount = packet->GetSize();
 
@@ -243,7 +283,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 
 		rtpPacket->header.seqNumber = m_uiFrameSquence;
 
-		rtpPacket->header.timeStamp = timeStamp;
+		rtpPacket->header.timeStamp = packet->GetTimeStamp();
 
 		rtpPacket->header.SSRC = 0x00000000;
 
@@ -293,7 +333,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 		
 		bufferCount -= (1400 - 18);
 
-		m_sqRtpPacketQueue.push(data);
+		m_sqRtpPacketQueue.Push(data);
 
 		delete rtpPacket;
 	}
@@ -318,7 +358,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 
 	rtpPacket->header.seqNumber = m_uiFrameSquence;
 
-	rtpPacket->header.timeStamp = timeStamp;
+	rtpPacket->header.timeStamp = packet->GetTimeStamp();
 
 	rtpPacket->header.SSRC = 0x00000000;
 
@@ -368,7 +408,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeSta
 
 	bufferCount -= (1400 - 18);
 
-	m_sqRtpPacketQueue.push(data);
+	m_sqRtpPacketQueue.Push(data);
 
 	delete rtpPacket;
 

@@ -7,18 +7,21 @@
 class CRTPService
 {
 public:
-
 	CRTPService();
 
 	void AddData(NALUH264Packet *packet);
 
 	void SetStatus(bool status);
 
+	uint8_t *GetPacket();
+
 	~CRTPService();
 private:
 	bool m_bRunStatus = false;
 
 	std::mutex m_lock;
+
+	uint8_t *m_pNALUH264Buffer = nullptr;
 
 	//后台线程，处理H264的封包操作
 	std::thread *m_stRtpPacketThread = nullptr;
@@ -28,17 +31,16 @@ private:
 	std::vector<uint8_t> m_svDataBuffer;	
 
 	//对H264的NAL进行RTP封包处理
-
 	uint16_t m_uiFrameSquence = 0;
 
-	std::queue<uint8_t*> m_sqRtpPacketQueue;
+	Queue_S<uint8_t> m_sqRtpPacketQueue;
 
-	void RtpPacketGenerate(uint32_t timeStamp);
+	void RtpPacketGenerate();
 
 	//单一H264封包操作
-	void RtpPacketGenerate_Signal(NALUH264Packet *packet, uint32_t timeStamp);
+	void RtpPacketGenerate_Signal(NALUH264Packet *packet);
 
 	//FUs模式H264封包处理
-	void RtpPacketGenerate_FUs(NALUH264Packet *packet, uint32_t timeStamp);
+	void RtpPacketGenerate_FUs(NALUH264Packet *packet);
 };
 

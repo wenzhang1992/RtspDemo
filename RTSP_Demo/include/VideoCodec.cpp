@@ -60,7 +60,7 @@ bool VideoEncodec::InitEncodec(int width, int height, bool IsNetWork, const char
     m_pCodec = avcodec_find_encoder(m_pCodecCtx->codec_id);
 
     //使能头部写入SPS,PPS
-    m_pCodecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    //m_pCodecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
     if (!m_pCodec)
     {

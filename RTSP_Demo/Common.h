@@ -72,6 +72,8 @@ private:
 
 	//uint8_t data[ImageWidth*ImageHeight*1.5];
 	uint8_t *data = new uint8_t[ImageWidth*ImageHeight*1.5];
+
+	uint32_t m_uTimeStamp;
 public:
 	NALUH264Packet()
 	{
@@ -88,6 +90,20 @@ public:
 		this->size = size;
 
 		data = new uint8_t[ImageWidth*ImageHeight*1.5];
+	}
+
+	uint32_t GetTimeStamp()
+	{
+		return this->m_uTimeStamp;
+	}
+
+	NALUH264Packet(int size, uint32_t timeStamp)
+	{
+		this->size = size;
+
+		data = new uint8_t[ImageWidth*ImageHeight*1.5];
+
+		this->m_uTimeStamp = timeStamp;
 	}
 
 	void SetStartType(bool isFiveStart)

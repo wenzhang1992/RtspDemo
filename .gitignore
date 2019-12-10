@@ -10,3 +10,4 @@
 *.ipch
 *.db
 .vs/RTSP_Demo/v14/.suo
+*.h264

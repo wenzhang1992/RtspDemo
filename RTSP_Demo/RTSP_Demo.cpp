@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "RTSPServer.h"
+#include "RTPService.h"
 #include "thread"
 #include "CycleQueue.h"
 #include "VideoCodec.h"
@@ -12,13 +13,13 @@
 
 void DataSourceFunc(CCycleQueue *dataBuffer)
 {
-	char *filePath;
+	char *filePath="E:\\test.raw";
 
 	int frameNum;
 
-	std::ifstream in(filePath);
+	std::ifstream in(filePath, std::ios::in | std::ios::binary);
 
-	in.open(filePath, std::ios::in);
+	//in.open(filePath, );
 
 	char *buffer = new char[ImageSize];
 
@@ -28,17 +29,16 @@ void DataSourceFunc(CCycleQueue *dataBuffer)
 	{
 		in.read(buffer, ImageSize);
 
-		if (in.fail() == true)
+		int count = in.gcount();
+
+		if (count != ImageSize)
 		{
 			break;
 		}
 		else
 		{
-			frameNum++;
 			dataBuffer->PushBack(reinterpret_cast<unsigned char *>(buffer), ImageSize, isFull);
 		}
-
-		in.seekg(frameNum*ImageSize);
 	}
 	delete[] buffer;
 	in.close();
@@ -47,7 +47,7 @@ void DataSourceFunc(CCycleQueue *dataBuffer)
 
 void DataProcessFunc(CCycleQueue *bufferSource,CCycleQueue *bufferDst)
 {
-	ImageChange *m_imageChange = new ImageChange(ImageWidth, ImageHeight, ImageWidth, ImageHeight, AV_PIX_FMT_GRAY8, AV_PIX_FMT_YUV420P);
+	ImageChange *m_imageChange = new ImageChange(ImageWidth, ImageHeight, ImageWidth, ImageHeight, AV_PIX_FMT_YUV420P, AV_PIX_FMT_GRAY8);
 
 	unsigned char *imageY16 = new unsigned char[ImageSize];
 
@@ -83,7 +83,7 @@ void DataProcessFunc(CCycleQueue *bufferSource,CCycleQueue *bufferDst)
 	delete[] m_imageChange;
 }
 
-void DataEncodecFun(CCycleQueue *bufferSource, Queue_S<NALUH264Packet> *buffer)
+void DataEncodecFun(CCycleQueue *bufferSource, CRTPService *rtpService)
 {
 	VideoEncodec *videoEncodc = new VideoEncodec();
 
@@ -107,13 +107,20 @@ void DataEncodecFun(CCycleQueue *bufferSource, Queue_S<NALUH264Packet> *buffer)
 
 			videoEncodc->WriteEncodecFrame(reinterpret_cast<uint8_t*>(imageYUV), reinterpret_cast<uint8_t*>(imageEncodec), frameSize, frameNum);
 
+			if (frameSize <= 0)
+			{
+				continue;
+			}
+
 			frameNum++;
 
-			NALUH264Packet *Packet = new NALUH264Packet(frameSize);
+			uint32_t timeStamp=0;
+
+			NALUH264Packet *Packet = new NALUH264Packet(frameSize,timeStamp);
 
 			Packet->PushData(imageEncodec, frameSize);
 
-			buffer->Push(Packet);
+			rtpService->AddData(Packet);
 		}
 	}
 }
@@ -122,9 +129,9 @@ int main()
 {
 	//char addr[] = "rtsp://127.0.0.1";
 
-	std::string temp = "127.0.0.1";
+	//std::string temp = "127.0.0.1";
 
-	CRTSPServer *m_server = new CRTSPServer(temp, 8554);
+	//CRTSPServer *m_server = new CRTSPServer(temp, 8554);
 
 	/************************************************************************/
 	/*								图像源读取								*/
@@ -141,11 +148,10 @@ int main()
 	/************************************************************************/
 	/*								图像编码处理								*/
 	/************************************************************************/
-	Queue_S<NALUH264Packet> *m_pNALUBuffer = new Queue_S<NALUH264Packet>();
-	std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_pNALUBuffer);
-	/************************************************************************/
-	/*								图像封包处理								*/
-	/************************************************************************/
+	//Queue_S<NALUH264Packet> *m_pNALUBuffer = new Queue_S<NALUH264Packet>();
+	CRTPService *m_rtpService = new CRTPService();
+	std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_rtpService);
+
 	while (1);
 
     return 0;
