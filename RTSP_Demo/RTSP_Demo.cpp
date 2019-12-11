@@ -39,6 +39,8 @@ void DataSourceFunc(CCycleQueue *dataBuffer)
 		{
 			dataBuffer->PushBack(reinterpret_cast<unsigned char *>(buffer), ImageSize, isFull);
 		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(40));
 	}
 	delete[] buffer;
 	in.close();
@@ -127,37 +129,42 @@ void DataEncodecFun(CCycleQueue *bufferSource, CRTPService *rtpService)
 
 int main()
 {
-	//char addr[] = "rtsp://127.0.0.1";
+	char addr[] = "rtsp://127.0.0.1";
 
-	//std::string temp = "127.0.0.1";
+	std::string temp = "127.0.0.1";
 
-	//CRTSPServer *m_server = new CRTSPServer(temp, 8554);
-
-	/************************************************************************/
-	/*								图像源读取								*/
-	/************************************************************************/
-	CCycleQueue *m_cDataSourceBuffer = new CCycleQueue();
-	m_cDataSourceBuffer->InitQueue(ImageSize, 50);
-	std::thread *m_stDataSourceThread = new std::thread(DataSourceFunc, m_cDataSourceBuffer);
-	/************************************************************************/
-	/*								图像转换处理								*/
-	/************************************************************************/
-	CCycleQueue *m_cDataDstBuffer = new CCycleQueue();
-	m_cDataDstBuffer->InitQueue(ImageWidth*ImageHeight*1.5, 50);
-	std::thread *m_stDataProcessThread = new std::thread(DataProcessFunc, m_cDataSourceBuffer, m_cDataDstBuffer);
-	/************************************************************************/
-	/*								图像编码处理								*/
-	/************************************************************************/
-	//Queue_S<NALUH264Packet> *m_pNALUBuffer = new Queue_S<NALUH264Packet>();
-	CRTPService *m_rtpService = new CRTPService();
-	std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_rtpService);
-	/************************************************************************/
-	/*								RTP数据发送							*/
-	/************************************************************************/
+	CRTSPServer *m_server = new CRTSPServer(temp, 8554);
 
 
-	while (1);
+	//连接建立后，通过RTP进行数据传输
+	while (true)
+	{
+		if (m_server->ConnectBuildStatus())
+		{
+			/************************************************************************/
+			/*								图像源读取								*/
+			/************************************************************************/
+			CCycleQueue *m_cDataSourceBuffer = new CCycleQueue();
+			m_cDataSourceBuffer->InitQueue(ImageSize);
+			std::thread *m_stDataSourceThread = new std::thread(DataSourceFunc, m_cDataSourceBuffer);
+			/************************************************************************/
+			/*								图像转换处理								*/
+			/************************************************************************/
+			CCycleQueue *m_cDataDstBuffer = new CCycleQueue();
+			m_cDataDstBuffer->InitQueue(ImageWidth*ImageHeight*1.5);
+			std::thread *m_stDataProcessThread = new std::thread(DataProcessFunc, m_cDataSourceBuffer, m_cDataDstBuffer);
+			/************************************************************************/
+			/*								图像编码处理								*/
+			/************************************************************************/
+			std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_server->GetRtp());
 
+			while (1)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			}
+			//RTP包发送在Server内进行处理
+		}		
+	}
     return 0;
 }
 

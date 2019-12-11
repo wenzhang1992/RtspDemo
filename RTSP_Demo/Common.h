@@ -63,14 +63,11 @@ typedef struct tag_RtpPacketFUs
 class NALUH264Packet
 {
 private:
-	//std::mutex m_lock;
-
 	int size;
 
 	//判断H264的NAL头是否为 00 00 00 00 01
 	bool isFiveStart = false;
 
-	//uint8_t data[ImageWidth*ImageHeight*1.5];
 	uint8_t *data = new uint8_t[ImageWidth*ImageHeight*1.5];
 
 	uint32_t m_uTimeStamp;
@@ -132,6 +129,19 @@ public:
 		return size;
 	}
 };
+
+typedef struct tag_VideoPacket
+{
+	int size=0;
+
+	uint8_t *data = nullptr;
+
+	~tag_VideoPacket()
+	{
+		delete[] data;
+	}
+
+}VideoPacket;
 
 template <typename T>
 class Queue_S

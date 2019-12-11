@@ -13,7 +13,7 @@ public:
 
 	void SetStatus(bool status);
 
-	uint8_t *GetPacket();
+	VideoPacket* GetPacket();
 
 	~CRTPService();
 private:
@@ -33,7 +33,7 @@ private:
 	//对H264的NAL进行RTP封包处理
 	uint16_t m_uiFrameSquence = 0;
 
-	Queue_S<uint8_t> m_sqRtpPacketQueue;
+	Queue_S<VideoPacket> m_sqRtpPacketQueue;
 
 	void RtpPacketGenerate();
 

@@ -1,5 +1,5 @@
 #pragma once
-
+#include <mutex>
 #define OPTIONS 0
 #define DESCRIBE 1
 #define SETUP 2
@@ -104,8 +104,11 @@ public:
 	char* respondPlay();
 	
 	RTSPParameter m_rtspParameter;
+
+	bool getBuildStatus();
+
 private:
-	
+	std::mutex m_lock;
 
 	bool m_bBuildSuceess = false;
 

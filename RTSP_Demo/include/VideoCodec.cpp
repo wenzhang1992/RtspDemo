@@ -56,7 +56,7 @@ bool VideoEncodec::InitEncodec(int width, int height, bool IsNetWork, const char
     m_pCodecCtx->time_base.den = 25;
     m_pCodecCtx->qmin = 10;
     m_pCodecCtx->qmax = 51;
-    m_pCodecCtx->max_b_frames = 3;
+    m_pCodecCtx->max_b_frames = 0;
     m_pCodec = avcodec_find_encoder(m_pCodecCtx->codec_id);
 
     //使能头部写入SPS,PPS

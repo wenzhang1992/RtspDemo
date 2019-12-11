@@ -20,7 +20,6 @@ void CRTPService::AddData(NALUH264Packet *packet)
 {
 	packet->GetData(m_pNALUH264Buffer);
 
-
 	for (int i = 0; i < packet->GetSize(); i++)
 	{
 		m_svDataBuffer.push_back(m_pNALUH264Buffer[i]);
@@ -124,9 +123,9 @@ void CRTPService::AddData(NALUH264Packet *packet)
 				beginItem++;
 			}
 		}
-		
-		
 	}
+
+	delete packet;
 }
 
 void CRTPService::SetStatus(bool status)
@@ -136,7 +135,7 @@ void CRTPService::SetStatus(bool status)
 	m_bRunStatus = status;
 }
 
-uint8_t * CRTPService::GetPacket()
+VideoPacket* CRTPService::GetPacket()
 {
 	std::unique_lock<std::mutex> lock(m_lock);
 
@@ -170,8 +169,8 @@ void CRTPService::RtpPacketGenerate()
 			}
 
 			delete h264Packet;
-
 		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	}
 }
 
@@ -217,7 +216,13 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet)
 
 		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 5);
 
-		m_sqRtpPacketQueue.Push(data);
+		VideoPacket *videoPacket = new VideoPacket();
+
+		videoPacket->size = packet->GetSize() + 16;
+
+		videoPacket->data = data;
+
+		m_sqRtpPacketQueue.Push(videoPacket);
 	}
 	else
 	{
@@ -231,7 +236,13 @@ void CRTPService::RtpPacketGenerate_Signal(NALUH264Packet *packet)
 
 		memcpy(data + 16, rtpPacket->data, packet->GetSize() - 4);
 
-		m_sqRtpPacketQueue.Push(data);
+		VideoPacket *videoPacket = new VideoPacket();
+
+		videoPacket->size = packet->GetSize() + 16;
+
+		videoPacket->data = data;
+
+		m_sqRtpPacketQueue.Push(videoPacket);
 	}
 
 	delete[] buffer;
@@ -266,7 +277,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 
 		memset(&(rtpPacket->header), 0x00, 16);
 
-		uint8_t *data = new uint8_t[1400 - 18];
+		uint8_t *data = new uint8_t[1400];
 
 		rtpPacket->header.V = 0x2;
 
@@ -338,84 +349,97 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 		
 		bufferCount -= (1400 - 18);
 
-		m_sqRtpPacketQueue.Push(data);
+		VideoPacket *videoPacket = new VideoPacket();
+
+		videoPacket->size = 1400;
+
+		videoPacket->data = data;
+
+		m_sqRtpPacketQueue.Push(videoPacket);
 
 		delete rtpPacket;
 	}
 
-	RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
-
-	uint8_t *data = new uint8_t[1400 - 18];
-
-	rtpPacket->header.V = 0x2;
-
-	rtpPacket->header.P = 0x0;
-
-	rtpPacket->header.X = 0x0;
-
-	rtpPacket->header.CC = 0x0;
-
-	rtpPacket->header.M = 0x0;
-
-	rtpPacket->header.PT = 0x60;
-
-	m_uiFrameSquence++;
-
-	rtpPacket->header.seqNumber = m_uiFrameSquence;
-
-	rtpPacket->header.timeStamp = packet->GetTimeStamp();
-
-	rtpPacket->header.SSRC = 0x00000000;
-
-	rtpPacket->header.CSRC = 0x00000000;
-
-	//复制RTP头
-	memcpy(data, &(rtpPacket->header), 16);
-
-	uint8_t *temp = (uint8_t*)(&(rtpPacket->indicator));
-
-	(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
-
-	temp = (uint8_t*)(&(rtpPacket->fuheader));
-
-	(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
-
-	if (isStart)
+	if (bufferCount > 0)
 	{
-		rtpPacket->fuheader.S = 0x1;
+		RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
 
-		isStart = false;
+		uint8_t *data = new uint8_t[bufferCount+18];
+
+		rtpPacket->header.V = 0x2;
+
+		rtpPacket->header.P = 0x0;
+
+		rtpPacket->header.X = 0x0;
+
+		rtpPacket->header.CC = 0x0;
+
+		rtpPacket->header.M = 0x0;
+
+		rtpPacket->header.PT = 0x60;
+
+		m_uiFrameSquence++;
+
+		rtpPacket->header.seqNumber = m_uiFrameSquence;
+
+		rtpPacket->header.timeStamp = packet->GetTimeStamp();
+
+		rtpPacket->header.SSRC = 0x00000000;
+
+		rtpPacket->header.CSRC = 0x00000000;
+
+		//复制RTP头
+		memcpy(data, &(rtpPacket->header), 16);
+
+		uint8_t *temp = (uint8_t*)(&(rtpPacket->indicator));
+
+		(*temp) = ((*temp) & 0xE0) | (NALHead & 0xE0);
+
+		temp = (uint8_t*)(&(rtpPacket->fuheader));
+
+		(*temp) = ((*temp) & 0x1F) | (NALHead & 0x1F);
+
+		if (isStart)
+		{
+			rtpPacket->fuheader.S = 0x1;
+
+			isStart = false;
+		}
+		else
+		{
+			rtpPacket->fuheader.S = 0x0;
+		}
+		//包结束标志置位
+		rtpPacket->fuheader.E = 0x1;
+
+		rtpPacket->fuheader.R = 0x0;
+
+		rtpPacket->indicator.TYPE = 28;
+
+		//复制FUs的Indicator
+		memcpy(data + 16, &(rtpPacket->indicator), 1);
+		//复制FUs的Header
+		memcpy(data + 17, &(rtpPacket->fuheader), 1);
+		//复制载荷数据
+		if (packet->GetStartType())
+		{
+			memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 5, bufferCount);
+		}
+		else
+		{
+			memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 4, bufferCount);
+		}
+
+		VideoPacket *videoPacket = new VideoPacket();
+
+		videoPacket->size = bufferCount + 18;
+
+		videoPacket->data = data;
+
+		m_sqRtpPacketQueue.Push(videoPacket);
+
+		delete rtpPacket;
 	}
-	else
-	{
-		rtpPacket->fuheader.S = 0x0;
-	}
-	//包结束标志置位
-	rtpPacket->fuheader.E = 0x1;
-
-	rtpPacket->fuheader.R = 0x0;
-
-	rtpPacket->indicator.TYPE = 28;
-
-	//复制FUs的Indicator
-	memcpy(data + 16, &(rtpPacket->indicator), 1);
-	//复制FUs的Header
-	memcpy(data + 17, &(rtpPacket->fuheader), 1);
-	//复制载荷数据
-	if (packet->GetStartType())
-	{
-		memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 5, bufferCount);
-	}
-	else
-	{
-		memcpy(data + 18, buffer + (packet->GetSize() - bufferCount) + 4, bufferCount);
-	}
-
-	bufferCount -= (1400 - 18);
-
-	m_sqRtpPacketQueue.Push(data);
-
-	delete rtpPacket;
 
 	delete[] buffer;
 }

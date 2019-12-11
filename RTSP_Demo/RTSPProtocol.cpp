@@ -206,6 +206,8 @@ bool CRTSPProtocol::analysePlay(char *buffer, int length)
 
 	if (strcmp(m_rtspParameter.currentOption, "PLAY\0")==0)
 	{
+		std::unique_lock<std::mutex> locker(m_lock);
+
 		m_bBuildSuceess = true;
 
 		return true;
@@ -229,6 +231,13 @@ char* CRTSPProtocol::respondPlay()
 		m_sdpData.sessionID);
 
 	return sBuf;
+}
+
+bool CRTSPProtocol::getBuildStatus()
+{
+	std::unique_lock<std::mutex> locker(m_lock);
+
+	return this->m_bBuildSuceess;
 }
 
 void CRTSPProtocol::getLineData(char *buffer, char* rowData, int length, int row)

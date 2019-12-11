@@ -4,7 +4,7 @@
 #include <thread>
 #include <iostream>
 #include "RTSPProtocol.h"
-
+#include "RTPService.h"
 #pragma comment (lib,"ws2_32.lib")
 
 #define RTSP_MAX_BUFFER_SIZE 4028
@@ -22,12 +22,19 @@ public:
 	CRTSPServer(std::string address,int port);
 
 	~CRTSPServer();
-private:
-	CRTSPProtocol *m_rtspProtocol = nullptr;
 
-	void InitRTCPSocket();
+	bool ConnectBuildStatus();
+
+	CRTPService* GetRtp()
+	{
+		return this->m_pRTPService;
+	}
 
 	void InitRTPSocket();
+
+	void InitRTCPSocket();
+private:
+	CRTSPProtocol *m_rtspProtocol = nullptr;
 
 	char *m_pIPAddress = nullptr;
 
@@ -43,6 +50,7 @@ private:
 	SOCKET m_sRTCPSocket;
 	//RTP套接字
 	SOCKET m_sRTPSocket;
+
 	sockaddr_in *m_sRTPAddress;
 
 	//接收线程
@@ -63,11 +71,12 @@ private:
 	std::thread *m_pRTCPThread = nullptr;
 
 	//RTP
+	CRTPService *m_pRTPService = nullptr;
+
 	char *m_pucRTPBuffer = nullptr;
 
 	std::thread *m_pRTPThread = nullptr;
 
 	static void RTPTransmitProcess(void *pUser);
-
 };
 

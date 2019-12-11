@@ -63,6 +63,11 @@ CRTSPServer::~CRTSPServer()
 
 }
 
+bool CRTSPServer::ConnectBuildStatus()
+{
+	return m_rtspProtocol->getBuildStatus();
+}
+
 void CRTSPServer::InitRTCPSocket()
 {
 	m_sRTCPSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_UDP);
@@ -84,7 +89,7 @@ void CRTSPServer::InitRTCPSocket()
 
 void CRTSPServer::InitRTPSocket()
 {
-	m_sRTPSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_UDP);
+	m_sRTPSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 	m_sRTPAddress = new sockaddr_in();
 
@@ -98,7 +103,9 @@ void CRTSPServer::InitRTPSocket()
 
 	m_pucRTPBuffer = new char[RTP_MAX_BUFFER_SIZE];
 
-	//bind(m_sRTPSocket, (sockaddr*)&sockAddr, sizeof(SOCKADDR));
+	m_pRTPService = new CRTPService();
+
+	std::thread *m_pRTPThread = new std::thread(RTPTransmitProcess, this);
 }
 
 void CRTSPServer::RTSPReceiveProcess(void *pOwner)
@@ -204,6 +211,8 @@ void CRTSPServer::RTSPReceiveProcess(void *pOwner)
 		{
 			char* sBuf = pUser->m_rtspProtocol->respondPlay();
 
+			pUser->InitRTPSocket();
+
 			if (pUser->m_icurrentSessionStatus == SETUP)
 			{
 				int sCount = send(clientSocket, sBuf, strlen(sBuf), 0);
@@ -211,18 +220,16 @@ void CRTSPServer::RTSPReceiveProcess(void *pOwner)
 				std::cout << sBuf << "\r\n";
 				std::cout << "PLAY SUCCESS" << "\r\n";
 				pUser->m_icurrentSessionStatus = PLAY;
-			}
-		
+
+
+			}		
 			delete[] sBuf;
-			
 		}
 		else
 		{
 			std::cout << "ANALYSE FAIL" << "\r\n";
 		}
-
 		delete[] dataBuffer;
-
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 
@@ -232,5 +239,32 @@ void CRTSPServer::RTPTransmitProcess(void *pUser)
 {
 	CRTSPServer *pOwner = reinterpret_cast<CRTSPServer*>(pUser);
 
+	while (true)
+	{
+		if (pOwner->m_rtspProtocol->getBuildStatus())
+		{
+			VideoPacket *packet = pOwner->m_pRTPService->GetPacket();
 
+			if (packet == nullptr)
+			{
+				continue;
+			}
+
+			int ret = sendto(pOwner->m_sRTPSocket, (char *)packet->data, packet->size, 0, (sockaddr *)(pOwner->m_sRTPAddress), sizeof(sockaddr_in));
+
+			if (ret < 0)
+			{
+				int error = WSAGetLastError();
+				std::cout << "send fail" << "\r\n";
+			}
+			else
+			{
+				std::cout << "send rtp packet" << "\r\n";
+			}
+
+			delete packet;		
+		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
 }
