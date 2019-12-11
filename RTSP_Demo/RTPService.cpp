@@ -260,10 +260,11 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 		NALHead = buffer[4];
 	}
 	
-
 	while (bufferCount >1400)
 	{
 		RTPPacket_FUs *rtpPacket = new RTPPacket_FUs();
+
+		memset(&(rtpPacket->header), 0x00, 16);
 
 		uint8_t *data = new uint8_t[1400 - 18];
 
@@ -290,7 +291,11 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 		rtpPacket->header.CSRC = 0x00000000;
 
 		//复制RTP头
-		memcpy(data, &rtpPacket, 16);
+		memcpy(data, &(rtpPacket->header), 16);
+
+		memset(&(rtpPacket->indicator), 0x00, 1);
+
+		memset(&(rtpPacket->fuheader), 0x00, 1);
 
 		uint8_t *temp =  (uint8_t*)(&(rtpPacket->indicator));
 
@@ -365,7 +370,7 @@ void CRTPService::RtpPacketGenerate_FUs(NALUH264Packet *packet)
 	rtpPacket->header.CSRC = 0x00000000;
 
 	//复制RTP头
-	memcpy(data, &rtpPacket, 16);
+	memcpy(data, &(rtpPacket->header), 16);
 
 	uint8_t *temp = (uint8_t*)(&(rtpPacket->indicator));
 

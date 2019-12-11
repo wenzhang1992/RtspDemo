@@ -206,6 +206,8 @@ bool CRTSPProtocol::analysePlay(char *buffer, int length)
 
 	if (strcmp(m_rtspParameter.currentOption, "PLAY\0")==0)
 	{
+		m_bBuildSuceess = true;
+
 		return true;
 	}
 	else

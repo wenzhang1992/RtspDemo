@@ -151,6 +151,10 @@ int main()
 	//Queue_S<NALUH264Packet> *m_pNALUBuffer = new Queue_S<NALUH264Packet>();
 	CRTPService *m_rtpService = new CRTPService();
 	std::thread *m_stDataEncodecThread = new std::thread(DataEncodecFun, m_cDataDstBuffer, m_rtpService);
+	/************************************************************************/
+	/*								RTPÊý¾Ý·¢ËÍ							*/
+	/************************************************************************/
+
 
 	while (1);
 

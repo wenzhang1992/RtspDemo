@@ -43,6 +43,7 @@ private:
 	SOCKET m_sRTCPSocket;
 	//RTP套接字
 	SOCKET m_sRTPSocket;
+	sockaddr_in *m_sRTPAddress;
 
 	//接收线程
 	//RTSP
@@ -65,5 +66,8 @@ private:
 	char *m_pucRTPBuffer = nullptr;
 
 	std::thread *m_pRTPThread = nullptr;
+
+	static void RTPTransmitProcess(void *pUser);
+
 };
 

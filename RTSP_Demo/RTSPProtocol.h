@@ -102,9 +102,12 @@ public:
 	*/
 
 	char* respondPlay();
-private:
-
+	
 	RTSPParameter m_rtspParameter;
+private:
+	
+
+	bool m_bBuildSuceess = false;
 
 	SDPData m_sdpData;
 

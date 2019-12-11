@@ -86,19 +86,19 @@ void CRTSPServer::InitRTPSocket()
 {
 	m_sRTPSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_UDP);
 
-	sockaddr_in sockAddr;
+	m_sRTPAddress = new sockaddr_in();
 
-	memset(&sockAddr, 0, sizeof(sockAddr));
+	memset(m_sRTPAddress, 0, sizeof(sockaddr_in));
 
-	sockAddr.sin_family = PF_INET;
+	m_sRTPAddress->sin_family = PF_INET;
 
-	sockAddr.sin_addr.s_addr = inet_addr(m_pIPAddress);
+	m_sRTPAddress->sin_addr.s_addr = inet_addr(m_pIPAddress);
 
-	sockAddr.sin_port = htons(m_iRTCPPort);
+	m_sRTPAddress->sin_port = htons(m_rtspProtocol->m_rtspParameter.clientRtpPort);
 
 	m_pucRTPBuffer = new char[RTP_MAX_BUFFER_SIZE];
 
-	bind(m_sRTPSocket, (sockaddr*)&sockAddr, sizeof(SOCKADDR));
+	//bind(m_sRTPSocket, (sockaddr*)&sockAddr, sizeof(SOCKADDR));
 }
 
 void CRTSPServer::RTSPReceiveProcess(void *pOwner)
@@ -225,5 +225,12 @@ void CRTSPServer::RTSPReceiveProcess(void *pOwner)
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
+
+}
+
+void CRTSPServer::RTPTransmitProcess(void *pUser)
+{
+	CRTSPServer *pOwner = reinterpret_cast<CRTSPServer*>(pUser);
+
 
 }
